@@ -1,0 +1,98 @@
+---
+title: "Practical Machine Learning"
+author: "Calvin"
+date: "April 9, 2019"
+output: html_document
+---
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement -
+a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har
+
+#Getting Data
+The training data for this project are available here:
+  https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+The test data are available here:
+  https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+#Loading library, data and exploring data
+```{r message=FALSE, warning=FALSE, include=FALSE}
+set.seed(123)
+library(caret)
+library(rpart)
+library(randomForest)
+library(e1071)
+library(gbm)
+library(rattle)
+setwd("C:/Coursera/Practical Machine Learning")
+traindata <- read.csv("pml-training.csv",na.strings=c("NA","#DIV/0!",""))
+testdata <- read.csv("pml-testing.csv",na.strings=c("NA","#DIV/0!",""))
+str(traindata)
+
+prop.table(table(traindata$classe))
+```
+
+#Remove variables that have no impact on the outcome 'classe'
+```{r}
+traindata <- traindata[,-c(1:7)]
+testdata <- testdata[,-c(1:7)]
+```
+
+#Splitting training data to 70% and 30% for testing
+```{r}
+intrain <- createDataPartition(traindata$classe, p =0.7, list=FALSE)
+trainset <- traindata[intrain,]
+testset <- traindata[-intrain,]
+dim(trainset)
+dim(testset)
+```
+
+#Cleaning Data
+##Remove variables that are near zero variance
+```{r}
+zerovar <- nearZeroVar(trainset)
+trainset <- trainset[,-zerovar]
+testset <- testset[,-zerovar]
+```
+
+##Remove columns with NA 
+```{r}
+trainset <- trainset[,colSums(is.na(trainset)) == 0]
+testset <- testset[,colSums(is.na(testset)) == 0]
+dim(trainset)
+dim(testset)
+```
+After cleaning the data we have only 53 variables
+
+#I start with Random Forest model with 5-fold cross validation cross validation
+```{r}
+controlrf <- trainControl(method="cv",5) 
+modelrf <- train(classe~.,data=trainset,method="rf",trControl = controlrf,ntree=250)
+modelrf$finalModel
+predrf <- predict(modelrf,testset)
+confusionMatrix(predrf,testset$classe)
+```
+This random forest model has a high accuracy of 99.29 ,thus my predicted accuracy for the out-of-sample error is 0.71%.
+
+#Decision Tree
+```{r}
+modeldt <- rpart(classe~.,data=trainset, method="class") 
+fancyRpartPlot(modeldt)
+predDt <- predict(modeldt,testset,type= "class")
+confusionMatrix(predDt,testset$classe)
+```
+
+#Generalized Boosted Model
+```{r}
+GBM <- trainControl(method ="repeatedcv", number=5 , repeats=1)
+modelGBM <- train(classe~., data=trainset, method = "gbm", trControl = GBM, verbose=FALSE)
+predGBM <- predict(modelGBM,testset,type="raw")
+confusionMatrix(predGBM, testset$classe)
+```
+
+From testing all the model, decision tree has an accuracy of 73.15% and GBM model has an accuracy of 96%. Random forest has the highest accuracy of 99.42% therefore the random forest is applied to predict on test data.
+```{r}
+predictTest <- predict(modelrf, testdata)
+predictTest
+```
